@@ -1,10 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
-import { Download, Moon, Play, Save, Sun, Upload } from 'lucide-react';
+import { Download, Eraser, Moon, Play, Save, Sun, Upload } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import Image from 'next/image';
 import Link from 'next/link';
-import React from 'react';
 import {
   Select,
   SelectContent,
@@ -13,14 +12,24 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { languages } from '@/sharedData/languages';
+import { useContext, useEffect, useState } from 'react';
+import { CodeEditorContext } from '@/context/CodeEditorContext';
+import { codeThemes } from '@/sharedData/codeTheme';
 
 const Navbar = () => {
   const { resolvedTheme, setTheme } = useTheme();
   const { user } = useUser();
+  const { language, setLanguage, codeTheme, setCodeTheme } =
+    useContext(CodeEditorContext);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <>
-      <nav className="p-3 flex items-center justify-between w-full shadow-md flex-wrap gap-2 sticky top-0 z-50 bg-white dark:bg-black">
+      <nav className="p-3 flex items-center justify-between w-full shadow-md flex-wrap gap-2  z-50 bg-white dark:bg-black">
         <Link href={'/'}>
           <Image
             src={
@@ -45,10 +54,17 @@ const Navbar = () => {
             <Button variant={'ghost'}>
               <Download />
             </Button>
+            <Button variant={'ghost'}>
+              <Eraser />
+            </Button>
           </div>
         )}
-        <div className="flex items-center gap-3">
-          <Select defaultValue="JAVA8">
+        <div className="flex items-center gap-5">
+          <Select
+            defaultValue="JAVA8"
+            onValueChange={(value) => setLanguage(value)}
+            value={language}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Java 8" />
             </SelectTrigger>
@@ -57,6 +73,23 @@ const Navbar = () => {
                 languages.map((lang, index) => (
                   <SelectItem value={lang.language} key={index}>
                     {lang.value}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <Select
+            defaultValue="monokai"
+            onValueChange={(value) => setCodeTheme(value)}
+            value={codeTheme}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Java 8" />
+            </SelectTrigger>
+            <SelectContent>
+              {codeThemes &&
+                codeThemes.map((cd, index) => (
+                  <SelectItem value={cd.theme} key={index}>
+                    {cd.value}
                   </SelectItem>
                 ))}
             </SelectContent>
@@ -81,10 +114,14 @@ const Navbar = () => {
               }}
             />
           )}
-          {resolvedTheme == 'dark' ? (
-            <Sun onClick={() => setTheme('light')} />
-          ) : (
-            <Moon onClick={() => setTheme('dark')} />
+          {mounted && (
+            <Button variant={'ghost'} size={'icon'}>
+              {resolvedTheme == 'dark' ? (
+                <Sun onClick={() => setTheme('light')} />
+              ) : (
+                <Moon onClick={() => setTheme('dark')} />
+              )}
+            </Button>
           )}
         </div>
       </nav>
