@@ -10,10 +10,10 @@ export const templates = {
   JAVA14: `// Java 14 Code\npublic class Main {\n    public static void main(String[] args) {\n        var message = "Hello, World!";\n        System.out.println(message);\n    }\n}`,
   JAVASCRIPT_NODE: `// JavaScript (Node.js)\nfunction greet(name) {\n    console.log(\`Hello, \${name}!\`);\n}\n\ngreet("World");`,
   KOTLIN: `// Kotlin Code\nfun main() {\n    println("Hello, World!")\n}`,
-  OBJECTIVEC: `// Objective-C Code\n#import <Foundation/Foundation.h>\n\nint main() {\n    @autoreleasepool {\n        NSLog(@"Hello, World!");\n    }\n    return 0;\n}`,
+
   PASCAL: `// Pascal Code\nprogram HelloWorld;\nbegin\n    writeln('Hello, World!');\nend.`,
   PERL: `# Perl Code\nuse strict;\nuse warnings;\n\nprint "Hello, World!\\n";`,
-  PHP: `<?php\n// PHP Code\nfunction greet($name) {\n    echo "Hello, " . $name . "!";\n}\n\ngreet("World");\n?>`,
+
   PYTHON: `# Python 2 Code\ndef greet(name):\n    print "Hello, " + name + "!"\n\ngreet("World")`,
   PYTHON3: `# Python 3 Code\ndef greet(name):\n    print(f"Hello, {name}!")\n\ngreet("World")`,
   PYTHON3_8: `# Python 3.8 Code\ndef greet(name: str) -> None:\n    print(f"Hello, {name}!")\n\ngreet("World")`,

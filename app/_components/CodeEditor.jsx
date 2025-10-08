@@ -1,8 +1,10 @@
 import { CodeEditorContext } from '@/context/CodeEditorContext';
 import { useContext, useEffect, useRef, useState } from 'react';
-import { languages } from '@/sharedData/languages';
 import { templates } from '@/sharedData/Template';
 import { modeMappings } from '@/sharedData/modeMappings';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '@/Config/firebaseConfig';
+import { useUser } from '@clerk/nextjs';
 
 const CodeEditor = () => {
   const {
@@ -13,14 +15,33 @@ const CodeEditor = () => {
     output,
     setOutput,
     setCodeTheme,
+    clearCode,
+    setClearCode,
+    showOutput,
+    codeId,
+    setShowOutput,
   } = useContext(CodeEditorContext);
-  const [showOutput, setShowOutput] = useState(false);
   const [lineCount, setLineCount] = useState(1);
   const [charCount, setCharCount] = useState(0);
-  const [copied, setCopied] = useState(false);
+
   const [isReady, setIsReady] = useState(false);
   const editorRef = useRef(null);
   const cmInstanceRef = useRef(null);
+  const { user } = useUser();
+
+  const updateCodeThemeOrLanguage = async () => {
+    if (!user?.primaryEmailAddress?.emailAddress || !language || !codeTheme) {
+      return;
+    }
+    const userRef = doc(db, 'users', user?.primaryEmailAddress?.emailAddress);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      updateDoc(userRef, {
+        language: language,
+        codeTheme: codeTheme,
+      });
+    }
+  };
 
   useEffect(() => {
     const checkCodeMirror = setInterval(() => {
@@ -31,7 +52,6 @@ const CodeEditor = () => {
     }, 100);
     const timeout = setTimeout(() => {
       clearInterval(checkCodeMirror);
-      console.log('CodeMirror failed to load');
     }, 10000);
 
     return () => {
@@ -57,6 +77,10 @@ const CodeEditor = () => {
         indentUnit: 4,
         indentWithTabs: false,
         lineWrapping: true,
+        extraKeys: {
+          'Ctrl-Space': 'autocomplete',
+          Enter: 'newlineAndIndentContinueComment',
+        },
       });
 
       editor.setSize(null, '100%');
@@ -76,6 +100,8 @@ const CodeEditor = () => {
       console.error('Error initializing CodeMirror:', error);
     }
 
+    console.log(window.CodeMirror.modes);
+
     return () => {
       if (cmInstanceRef.current) {
         try {
@@ -88,33 +114,157 @@ const CodeEditor = () => {
     };
   }, [isReady, setCode]);
 
+  // useEffect(() => {
+
+  //   const fetchCodeFromFireDB = async (language) => {
+  //     try {
+  //       const codeRef = doc(db, 'code', codeId);
+  //       const codeSnap = await getDoc(codeRef);
+  //       if (codeSnap.exists()) {
+  //         const data = codeSnap.data();
+  //         const codes = data?.codes || [];
+  //         const index = codes.findIndex(
+  //           (c) => c.language == language
+  //         );
+  //         if (index !== -1) {
+  //           if (codes[index].code) {
+  //             setCode(codes[index].code);
+  //             setCharCount((codes[index].code || '').length);
+  //           } else {
+  //             setCode(templates[language] || '');
+  //             setCharCount((templates[language] || '').length);
+  //           }
+  //           if (codes[index].output) {
+  //             setOutput(codes[index].output);
+  //             setShowOutput(true);
+  //           } else {
+  //             setOutput('');
+  //             setShowOutput(false);
+  //           }
+  //         }
+  //       }
+  //     } catch (error) {
+  //       console.log(error);
+  //     }
+  //   };
+
+  //   if (cmInstanceRef.current && language && modeMappings[language]) {
+  //     try {
+  //       cmInstanceRef.current.setOption('mode', modeMappings[language]);
+  //       fetchCodeFromFireDB(language);
+  //       setLineCount(cmInstanceRef.current.lineCount());
+  //       cmInstanceRef.current.setValue(code || '');
+  //       updateCodeThemeOrLanguage();
+  //     } catch (error) {
+  //       console.error('Error setting language mode:', error);
+  //     }
+  //   }
+  // }, [language]);
+
   useEffect(() => {
-    if (cmInstanceRef.current && language && modeMappings[language]) {
+    const fetchCodeFromFireDB = async (language) => {
       try {
-        cmInstanceRef.current.setOption('mode', modeMappings[language]);
-        setCode(templates[language] || '');
-        setLineCount(cmInstanceRef.current.lineCount());
-        setCharCount((templates[language] || '').length);
-        cmInstanceRef.current.setValue(templates[language] || '');
+        const codeRef = doc(db, 'code', codeId);
+        const codeSnap = await getDoc(codeRef);
+        if (codeSnap.exists()) {
+          const data = codeSnap.data();
+          const codes = data?.codes || [];
+          const index = codes.findIndex((c) => c.language == language);
+          if (index !== -1) {
+            const fetchedCode = codes[index].code || '';
+            setCode(fetchedCode);
+            setCharCount(fetchedCode.length);
+            const fetchedOutput = codes[index].output || '';
+            setOutput(fetchedOutput);
+            setShowOutput(!!fetchedOutput);
+          } else {
+            const fetchedCode = templates[language] || '';
+            setCode(fetchedCode);
+            setCharCount(fetchedCode.length);
+            setOutput('');
+            setShowOutput(false);
+          }
+        }
       } catch (error) {
-        console.error('Error setting language mode:', error);
+        console.log(error);
       }
+    };
+    updateCodeThemeOrLanguage();
+
+    if (cmInstanceRef.current && language && modeMappings[language]) {
+      cmInstanceRef.current.setOption('mode', modeMappings[language]);
+      fetchCodeFromFireDB(language);
     }
   }, [language]);
+
+  // Use another useEffect to update the editor value once `code` state changes:
+  useEffect(() => {
+    if (cmInstanceRef.current) {
+      const currentValue = cmInstanceRef.current.getValue();
+      if (code !== currentValue) {
+        const cursor = cmInstanceRef.current.getCursor();
+        cmInstanceRef.current.setValue(code || '');
+        cmInstanceRef.current.setCursor(cursor);
+      }
+      setLineCount(cmInstanceRef.current.lineCount());
+    }
+  }, [code]);
 
   useEffect(() => {
     if (cmInstanceRef.current && codeTheme) {
       try {
         setCodeTheme(codeTheme);
         cmInstanceRef.current.setOption('theme', codeTheme);
+        updateCodeThemeOrLanguage();
       } catch (error) {
         console.error('Error setting theme:', error);
       }
     }
   }, [codeTheme]);
 
+  const clearCodefromDB = async () => {
+    try {
+      const codeRef = doc(db, 'code', codeId);
+      const codeSnap = await getDoc(codeRef);
+      if (codeSnap.exists()) {
+        const data = codeSnap.data();
+        const codes = data?.codes || [];
+        const index = codes.findIndex((c) => c.language == language);
+        if (index !== -1) {
+          codes.splice(index, 1);
+          await updateDoc(codeRef, {
+            codes,
+            updatedAt: new Date(),
+          });
+        }
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleClear = () => {
+    if (window.confirm('Clear all code from DB?')) {
+      if (cmInstanceRef.current) {
+        clearCodefromDB();
+        cmInstanceRef.current.setValue('');
+        setCode(templates[language] || '');
+        setLineCount(cmInstanceRef.current.lineCount());
+        setCharCount((templates[language] || '').length);
+        cmInstanceRef.current.setValue(templates[language] || '');
+      }
+      setShowOutput(false);
+    }
+  };
+  useEffect(() => {
+    if (clearCode) {
+      handleClear();
+      setClearCode(false);
+    }
+  }, [clearCode]);
+
   return (
-    <div className="flex flex-col h-[85vh] text-white w-full px-10 ">
+    <div className="flex flex-col h-[85vh] text-white w-full px-3 sm:px-10 mt-2 rounded-md justify-center">
       <div className=" overflow-hidden h-full">
         <div
           ref={editorRef}
@@ -134,7 +284,7 @@ const CodeEditor = () => {
         <div>Press Ctrl+Space for autocomplete</div>
       </div>
       {showOutput && (
-        <div className="bg-gray-950 border-t-2 border-gray-700 p-4 max-h-68 overflow-y-auto">
+        <div className="bg-gray-950 border-t-2 border-gray-700 p-4 max-h-[300px] overflow-y-auto min-h-[200px]">
           <h3 className="text-cyan-400 mb-2 text-base font-semibold">
             Output:
           </h3>
